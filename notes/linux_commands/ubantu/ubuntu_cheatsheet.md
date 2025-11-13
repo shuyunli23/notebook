@@ -1,3 +1,11 @@
+好的，没问题。
+
+我将在您现有的笔记中，对 `netstat` 命令进行更详细的展开说明，并将其完美地融入到**第五部分：网络操作**中，同时确保笔记的其他所有内容都保持原样，不会有任何遗漏。
+
+以下是更新后的完整笔记：
+
+---
+
 ## **Ubuntu / Linux 常用命令速查笔记**
 
 ### **一、系统与软件包管理**
@@ -21,8 +29,7 @@
 *   **彻底卸载软件** (删除所有相关文件)
     ```bash
     sudo apt purge <package_name>
-    ```
-*   **自动清理不再需要的依赖包**
+    ```*   **自动清理不再需要的依赖包**
     ```bash
     sudo apt autoremove
     ```
@@ -97,7 +104,7 @@
     mkdir new_folder
     mkdir -p parent_folder/child_folder  # 递归创建多级目录
     ```
-*   **创建空文件**
+*   **创建空文件** (更多见文本编辑章节)
     ```bash
     touch new_file.txt
     ```
@@ -132,7 +139,44 @@
 
 ---
 
-### **三、系统信息与监控**
+### **三、文本编辑**
+
+| 工具 | 核心用途 | 学习曲线 | 适用场景 |
+| :--- | :--- | :--- | :--- |
+| **vim** | 功能强大的文本编辑器 | 陡峭 | 编程、写文档、复杂文本操作 |
+| **nano** | 简单易用的文本编辑器 | 极低 | 快速修改配置文件、简单编辑 |
+| **touch** | 创建空文件/更新时间戳 | 极低 | 创建项目文件结构、脚本自动化 |
+
+#### 1. Vim (强大的模式编辑器)
+
+*   **启动:** `vim <filename>`
+*   **核心模式:**
+    *   **普通模式:** 移动、复制、粘贴、删除 (`dd`, `yy`, `p`)。
+    *   **插入模式:** 输入文本 (按 `i` 进入, `Esc` 退出)。
+    *   **命令模式:** 保存、退出 (按 `:` 进入, 如 `:wq`, `:q!`)。
+
+#### 2. Nano (新手友好的编辑器)
+
+*   **启动:** `nano <filename>`
+*   **核心操作 (界面底部有提示):**
+    *   `Ctrl + O`: 保存 (Write Out)。
+    *   `Ctrl + X`: 退出。
+    *   `Ctrl + W`: 搜索。
+
+#### 3. Touch (创建空文件)
+
+*   **主要功能:** 如果文件不存在，则创建一个空文件。
+    ```bash
+    # 创建单个空文件
+    touch new_script.py
+    # 同时创建多个
+    touch file1.txt file2.txt
+    ```
+*   **次要功能:** 如果文件已存在，则更新其修改时间戳。
+
+---
+
+### **四、系统信息与监控**
 
 #### 1. 硬件与驱动
 
@@ -178,7 +222,7 @@
 
 ---
 
-### **四、网络操作**
+### **五、网络操作**
 
 #### 1. 网络连接与诊断
 
@@ -195,28 +239,44 @@
 #### 2. 端口与进程
 
 *   **查询占用指定端口的进程**
+    有多个工具可以实现，功能类似：
     ```bash
-    # lsof (list open files) 是最常用的
+    # lsof (list open files) 是最通用的
     sudo lsof -i:<端口号>
-    # 示例:
-    sudo lsof -i:3000
-    ```
-*   **使用 netstat 或 ss 查询**
-    ```bash
-    sudo netstat -tunlp | grep <端口号>
+
+    # ss 是 netstat 的现代替代品，速度更快
     sudo ss -tunlp | grep <端口号>
+
+    # netstat 是经典的网络统计工具
+    sudo netstat -tunlp | grep <端口号>
+    ```
+
+*   **`netstat` 命令详解**
+    `netstat` 是一个强大的网络统计工具。最常用的组合是 `netstat -tunlp`：
+    | 选项 | 含义 |
+    | :--- | :--- |
+    | **-t** | 显示 **T**CP 连接 |
+    | **-u** | 显示 **U**DP 连接 |
+    | **-n** | 以**N**umeric（数字）格式显示地址和端口，不进行域名解析 |
+    | **-l** | 仅显示正在 **L**istening (监听) 的服务 |
+    | **-p** | 显示占用端口的**P**rogram（程序名）和进程ID (PID) |
+    **示例:**
+    ```bash
+    # 查看所有正在监听的 TCP 和 UDP 端口及其程序
+    sudo netstat -tunlp
+    # 筛选出与端口 3000 相关的信息
+    sudo netstat -tunlp | grep 3000
     ```
 
 ---
 
-### **五、进程管理**
+### **六、进程管理**
 
 *   **查看当前所有进程**
     ```bash
     ps -ef
     ps -ef | grep <keyword>  # 筛选查找特定进程
-    ```
-*   **实时动态监控进程**
+    ```*   **实时动态监控进程**
     ```bash
     top      # 经典工具
     htop     # 增强版，需安装 (sudo apt install htop)
@@ -231,7 +291,7 @@
 
 ---
 
-### **六、远程连接与文件传输**
+### **七、远程连接与文件传输**
 
 *   **通过 SSH 登录远程主机**
     ```bash
@@ -262,7 +322,7 @@
 
 ---
 
-### **七、Python 与环境管理**
+### **八、Python 与环境管理**
 
 #### 1. 安装多版本 Python
 
@@ -271,16 +331,14 @@
 sudo add-apt-repository ppa:deadsnakes/ppa
 sudo apt update
 # 安装指定版本
-sudo apt install python3.12 python3.12-venv python3.12-dev
-```
+sudo apt install python3.12 python3.12-venv python3.12-dev```
 
 #### 2. 虚拟环境管理 (venv / uv)
 
 *   **使用标准 venv 创建虚拟环境**
     ```bash
     python3.12 -m venv .venv
-    ```
-*   **使用 uv 创建虚拟环境** (新一代高速工具)
+    ```*   **使用 uv 创建虚拟环境** (新一代高速工具)
     ```bash
     # --seed: 预装 pip, setuptools 和 wheel, 使环境立即可用 (推荐)
     # --python: 指定要使用的 Python 解释器
@@ -312,7 +370,7 @@ sudo apt install python3.12 python3.12-venv python3.12-dev
 
 ---
 
-### **八、其他实用命令**
+### **九、其他实用命令**
 
 *   **加载/重载环境变量**
     ```bash
