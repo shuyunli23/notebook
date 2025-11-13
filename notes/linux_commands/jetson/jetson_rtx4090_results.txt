@@ -1,0 +1,375 @@
+# NVIDIA GeForce RTX 4090
+
+/home/quan/Euen/Server/.venv/bin/python3.10 /home/quan/Euen/Server/clients/cli.py --requests 9
+🚀 开始视觉模型并发测试...
+📊 请求数量: 9
+🎯 最大token数: 512
+🌐 服务器地址: http://localhost:8001
+--------------------------------------------------------------------------------
+🖼️  请求 1: 正在加载图片...
+🚀 请求 1: 开始处理...
+🖼️  请求 2: 正在加载图片...
+🚀 请求 2: 开始处理...
+🖼️  请求 3: 正在加载图片...
+🚀 请求 3: 开始处理...
+🖼️  请求 4: 正在加载图片...
+🚀 请求 4: 开始处理...
+🖼️  请求 5: 正在加载图片...
+🚀 请求 5: 开始处理...
+🖼️  请求 6: 正在加载图片...
+🚀 请求 6: 开始处理...
+🖼️  请求 7: 正在加载图片...
+🚀 请求 7: 开始处理...
+🖼️  请求 8: 正在加载图片...
+🚀 请求 8: 开始处理...
+🖼️  请求 9: 正在加载图片...
+🚀 请求 9: 开始处理...
+
+====================================================================================================
+📋 视觉理解测试详细结果:
+====================================================================================================
+✅ 请求 1 [09:13:36]
+   🖼️  图片: https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen-VL/assets/demo.jpeg
+   📝 提示: Describe this image in detail.
+   ⏱️  耗时: 5.21s
+   🎯 生成Token: 195 个
+   ⚡ 速度: 37.40 tokens/s
+   💬 回复: This image appears to be heavily pixelated and distorted, making it difficult to discern any clear details. However, I can describe some of the observable elements:
+
+1. **Color**: The colors seem to range from light to dark shades of gray, with hints of orange and purple in some areas.
+2. **Pattern**: There is a repetitive, grid-like pattern across the entire image, which might be due to either the nature of the original image or the effect applied.
+3. **Lighting**: The lighting seems to vary, with brighter areas in the top center and darker areas towards the bottom and sides.
+4. **Texture**: The texture looks rough and uneven, possibly indicating that the image has been altered or processed in some way.
+
+Given the high level of distortion, it's challenging to identify specific objects or ...
+--------------------------------------------------------------------------------
+✅ 请求 2 [09:13:34]
+   🖼️  图片: https://ofasys-multimodal-wlcb-3-toshanghai.oss-accelerate.aliyuncs.com/wpf272043/keepme/image/receipt.png
+   📝 提示: Read all the text in the image.
+   ⏱️  耗时: 3.28s
+   🎯 生成Token: 75 个
+   ⚡ 速度: 22.86 tokens/s
+   💬 回复: Auntie Anne's
+CINNAMON SUGAR
+1 x 17,000
+17,000
+SUBTOTAL
+17,000
+GRAND TOTAL
+17,000
+CASH/DR
+20,000
+CHANGE DUE
+3,000
+--------------------------------------------------------------------------------
+✅ 请求 3 [09:13:38]
+   🖼️  图片: https://language.chinadaily.com.cn/images/attachement/jpg/site1/20160510/00221910993f189bf0bc52.jpg
+   📝 提示: Extract the full text from the newspaper exactly as it is, including every word.
+   ⏱️  耗时: 7.68s
+   🎯 生成Token: 512 个
+   ⚡ 速度: 66.63 tokens/s
+   💬 回复: CREDITALDAYS
+March 5-11, 2016
+Trump rallies, flash-color
+Saturday
+Warring
+match
+stall
+4th
+game
+home
+Wednesday
+Smaller boost
+in military
+spending
+seen
+Expecters to
+prove accurate
+Spot checks show
+Chinese state media
+tapes of Trump speaking to
+China's top defense officials
+showed both men
+were pleased with each other's
+speeches. Trump would
+defend China's defense spending,
+while Xi promised that despite
+Washington's pressure, China will
+not reduce its defense budget.
+The figures were presented by China's
+State Council News Agency on Saturday. Xi
+predicted that in four years, China's defense
+spending would reach $1 trillion
+— a 3% increase over this year's
+$318 billion.
+According to the State Council, China's
+economy grew at 6.9% last year and
+is now expected to grow at 7.2% this
+year, compar...
+--------------------------------------------------------------------------------
+✅ 请求 4 [09:13:35]
+   🖼️  图片: https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen-VL/assets/demo.jpeg
+   📝 提示: What objects can you see in this image? List them.
+   ⏱️  耗时: 3.83s
+   🎯 生成Token: 143 个
+   ⚡ 速度: 37.36 tokens/s
+   💬 回复: This is an example of an image with noise or distortion, where the original content is obscured by pixelation and color artifacts. Given the nature of the image, it's not possible to identify specific objects, but I can describe what might be present:
+
+- The image seems to have a patterned background that could include geometric shapes or abstract designs.
+- There are hints of colors such as white, gray, orange, and blue, suggesting the presence of light sources or reflections.
+- Object outlines or shapes might be partially visible, though they are very distorted and indistinct due to the noise.
+
+If you have more context or another image with fewer noise artifacts, please provide it so I can assist you better.
+--------------------------------------------------------------------------------
+✅ 请求 5 [09:13:34]
+   🖼️  图片: https://img2.baidu.com/it/u=3143282702,2145280608&fm=253&app=138&f=JPEG?w=800&h=1176
+   📝 提示: What characters do you see in this image?
+   ⏱️  耗时: 2.52s
+   🎯 生成Token: 63 个
+   ⚡ 速度: 25.02 tokens/s
+   💬 回复: The image appears to be a collage of various elements, but it's difficult to discern specific characters or patterns from the repeated sections. The background seems to show different scenes, possibly depicting houses or buildings and people with different expressions or actions. However, the overall design is abstract and not easily recognizable as individual characters.
+--------------------------------------------------------------------------------
+✅ 请求 6 [09:13:34]
+   🖼️  图片: https://img1.baidu.com/it/u=3809733790,1132788165&fm=253&app=138&f=JPEG?w=1422&h=800
+   📝 提示: What is the weather like in this image?
+   ⏱️  耗时: 2.78s
+   🎯 生成Token: 85 个
+   ⚡ 速度: 30.54 tokens/s
+   💬 回复: The weather in this image appears to be pleasant and conducive to outdoor activities. The sky is clear with a few scattered clouds, suggesting good visibility. The sun is shining brightly, casting a pleasant light over the landscape. The trees and grass look lush and healthy, indicating a likely warm day with adequate sunlight. Overall, it seems like a sunny and clear day, making it suitable for various outdoor tasks or leisurely activities.
+--------------------------------------------------------------------------------
+✅ 请求 7 [09:13:33]
+   🖼️  图片: https://img1.baidu.com/it/u=4225257766,2460304301&fm=253&fmt=auto&app=138&f=JPEG?w=231&h=500
+   📝 提示: What character do you see in this image, and what mood does the character feel?
+   ⏱️  耗时: 1.15s
+   🎯 生成Token: 37 个
+   ⚡ 速度: 32.05 tokens/s
+   💬 回复: In this image, I see the character Tom from "Tom and Jerry." The character appears to be surprised or confused, as indicated by the raised eyebrows and the slightly tilted head.
+--------------------------------------------------------------------------------
+✅ 请求 8 [09:13:34]
+   🖼️  图片: https://img2.baidu.com/it/u=500643173,2012953556&fm=253&fmt=auto&app=138&f=JPEG?w=500&h=1407
+   📝 提示: What characters do you see in this image and what might have happened between them?
+   ⏱️  耗时: 2.30s
+   🎯 生成Token: 136 个
+   ⚡ 速度: 59.16 tokens/s
+   💬 回复: In the image, I see two characters: one with a white outfit and the other with a purple outfit. The character in the white outfit is saying something, while the character in the purple outfit is listening.
+
+Based on the dialogue, it seems like the character in the white outfit is trying to hurry or suggest that they should move quickly ("Now go..."). The character in the purple outfit appears to be listening attentively and seems to understand the urgency.
+
+It's possible that they are discussing some urgent matter, possibly related to transportation or an emergency. The context suggests that there is a sense of urgency, which could imply that they need to get somewhere quickly for a reason.
+--------------------------------------------------------------------------------
+✅ 请求 9 [09:13:38]
+   🖼️  图片: https://h.cdn.zhuolaoshi.cn/user/site26644/image/20180927/20180927072723952395.jpg
+   📝 提示: What information can you extract from this image? Please organize the extracted information into a structured format and present it.
+   ⏱️  耗时: 5.93s
+   🎯 生成Token: 512 个
+   ⚡ 速度: 86.41 tokens/s
+   💬 回复: Here is the structured information extracted from the image:
+
+**Academic Transcript for Student of Southwestern University of Finance and Economics**
+
+| Course No. | Name | Credit Hours | Course Name | Course Code | Grade/Score | Grade/Mark | Cumulative GPA |
+|------------|------|-------------|-------------|-------------|-------------|-------------|----------------|
+| Xxxxxx     | 1    | 4           | Compulsory   | 3            | 82          | 79         | 77.6           |
+| Xxxxxx     | 2    |             | English      | 3            | 82          | 79         |                  |
+| Xxxxxx     | 3    |             | Chinese      | 3            | 85          | 80         |                  |
+| Xxxxxx     | 4    |             | Data Structure | 3            | 78          | 80         |   ...
+--------------------------------------------------------------------------------
+====================================================================================================
+📊 视觉模型性能统计:
+====================================================================================================
+✅ 成功请求: 9/9
+❌ 失败请求: 0
+⏱️  总耗时: 8.33s
+🎯 总生成Token: 1758
+📝 总输入Token: 12449
+
+⏱️  响应时间统计:
+   平均: 3.85s
+   最快: 1.15s
+   最慢: 7.68s
+   中位数: 3.28s
+
+⚡ Token生成速度统计:
+   平均: 44.16 tokens/s
+   最快: 86.41 tokens/s
+   最慢: 22.86 tokens/s
+   中位数: 37.36 tokens/s
+
+🚀 整体吞吐量: 211.07 tokens/s
+📈 并发效率: 1.08 requests/s
+🖼️  图片处理效率: 1.08 images/s
+====================================================================================================
+
+Process finished with exit code 0
+
+
+
+# Jetson AGX Orin
+
+/home/quan/Euen/Server/.venv/bin/python3.10 /home/quan/Euen/Server/clients/cli.py --url http://192.168.9.163:8001 --requests 9
+🚀 开始视觉模型并发测试...
+📊 请求数量: 9
+🎯 最大token数: 512
+🌐 服务器地址: http://192.168.9.163:8001
+--------------------------------------------------------------------------------
+🖼️  请求 1: 正在加载图片...
+🚀 请求 1: 开始处理...
+🖼️  请求 2: 正在加载图片...
+🚀 请求 2: 开始处理...
+🖼️  请求 3: 正在加载图片...
+🚀 请求 3: 开始处理...
+🖼️  请求 4: 正在加载图片...
+🚀 请求 4: 开始处理...
+🖼️  请求 5: 正在加载图片...
+🚀 请求 5: 开始处理...
+🖼️  请求 6: 正在加载图片...
+🚀 请求 6: 开始处理...
+🖼️  请求 7: 正在加载图片...
+🚀 请求 7: 开始处理...
+🖼️  请求 8: 正在加载图片...
+🚀 请求 8: 开始处理...
+🖼️  请求 9: 正在加载图片...
+🚀 请求 9: 开始处理...
+
+====================================================================================================
+📋 视觉理解测试详细结果:
+====================================================================================================
+✅ 请求 1 [09:13:46]
+   🖼️  图片: https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen-VL/assets/demo.jpeg
+   📝 提示: Describe this image in detail.
+   ⏱️  耗时: 20.68s
+   🎯 生成Token: 225 个
+   ⚡ 速度: 10.88 tokens/s
+   💬 回复: The image depicts a serene beach scene with a young woman and her dog enjoying their time together. The woman is sitting on the sandy beach, facing her light-colored dog, which appears to be a Labrador Retriever. Both the woman and the dog are engaged in a playful interaction, with the dog gently tapping its paw on the woman's hand.
+
+The woman is wearing a plaid shirt and jeans, and she has long hair that is illuminated by the warm glow of the setting sun. She is smiling and looking at the dog affectionately. The dog has a collar with a small tag and a leash attached, suggesting they might have been out for a walk or run.
+
+The beach is relatively empty, with only a few footprints visible in the sand. The ocean waves can be seen crashing onto the shore in the background, adding to the tranq...
+--------------------------------------------------------------------------------
+✅ 请求 2 [09:13:35]
+   🖼️  图片: https://ofasys-multimodal-wlcb-3-toshanghai.oss-accelerate.aliyuncs.com/wpf272043/keepme/image/receipt.png
+   📝 提示: Read all the text in the image.
+   ⏱️  耗时: 9.60s
+   🎯 生成Token: 74 个
+   ⚡ 速度: 7.71 tokens/s
+   💬 回复: Auntie Anne's
+CINNAMON SUGAR
+1 x 17.000
+17,000
+SUB TOTAL
+17,000
+GRAND TOTAL
+17,000
+CASH IDR
+20,000
+CHANGE DUE
+3,000
+--------------------------------------------------------------------------------
+✅ 请求 3 [09:14:05]
+   🖼️  图片: https://language.chinadaily.com.cn/images/attachement/jpg/site1/20160510/00221910993f189bf0bc52.jpg
+   📝 提示: Extract the full text from the newspaper exactly as it is, including every word.
+   ⏱️  耗时: 39.55s
+   🎯 生成Token: 512 个
+   ⚡ 速度: 12.95 tokens/s
+   💬 回复: Promising future Party rivals clash Suning boss calls 2016 Year of opportunities! March 5-6, 2016 China Daily winning streak Warriors match NBA record with 44th straight home game win WEEKEND CHINA CHINADAILY 32 POLICY 32 Mar. 5-6, 2016 chinadaily.com.cn Y2 BUDGET Smaller boost in military spending seen Figure expected to be the lowest since 2010, as nations try to balance economic growth with defense outlays Xi promises wider access to private firms President Xi Jinping pledged to make progress on key economic and social reforms during his visit this week to the private sector during a panel discussion in Beijing on Friday. Xi met with members of the intellectual class, Xi also urged the private sector to support the government. Xi promised that he would work closely with political adviso...
+--------------------------------------------------------------------------------
+✅ 请求 4 [09:13:36]
+   🖼️  图片: https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen-VL/assets/demo.jpeg
+   📝 提示: What objects can you see in this image? List them.
+   ⏱️  耗时: 10.50s
+   🎯 生成Token: 92 个
+   ⚡ 速度: 8.76 tokens/s
+   💬 回复: In the image, I can see:
+
+1. A person sitting on the beach.
+2. A yellow dog sitting on the beach.
+3. The ocean in the background.
+4. The sun is either rising or setting, casting a warm light over the scene.
+5. The person appears to be wearing a plaid shirt and black pants.
+6. There is a leash on the ground near the person.
+7. The beach sand has footprints.
+--------------------------------------------------------------------------------
+✅ 请求 5 [09:13:34]
+   🖼️  图片: https://img2.baidu.com/it/u=3143282702,2145280608&fm=253&app=138&f=JPEG?w=800&h=1176
+   📝 提示: What characters do you see in this image?
+   ⏱️  耗时: 7.81s
+   🎯 生成Token: 59 个
+   ⚡ 速度: 7.56 tokens/s
+   💬 回复: The image depicts Naruto Uzumaki, a prominent character from the anime and manga series "Naruto." He is wearing his signature headband with the Leaf Village symbol and has spiky blonde hair. The background shows a scenic outdoor setting with water, trees, and buildings.
+--------------------------------------------------------------------------------
+✅ 请求 6 [09:13:33]
+   🖼️  图片: https://img1.baidu.com/it/u=3809733790,1132788165&fm=253&app=138&f=JPEG?w=1422&h=800
+   📝 提示: What is the weather like in this image?
+   ⏱️  耗时: 7.14s
+   🎯 生成Token: 53 个
+   ⚡ 速度: 7.42 tokens/s
+   💬 回复: The weather in the image appears to be sunny and pleasant. The sky is clear with some scattered clouds, and the sun is shining brightly, casting a warm and inviting light over the landscape. The overall atmosphere suggests a bright, clear day with good weather conditions.
+--------------------------------------------------------------------------------
+✅ 请求 7 [09:13:32]
+   🖼️  图片: https://img1.baidu.com/it/u=4225257766,2460304301&fm=253&fmt=auto&app=138&f=JPEG?w=231&h=500
+   📝 提示: What character do you see in this image, and what mood does the character feel?
+   ⏱️  耗时: 6.06s
+   🎯 生成Token: 42 个
+   ⚡ 速度: 6.93 tokens/s
+   💬 回复: The character in the image is Tom from the classic animated series "Tom and Jerry." He appears to be feeling surprised or confused, as indicated by his wide-eyed expression and the question mark above his head.
+--------------------------------------------------------------------------------
+✅ 请求 8 [09:13:43]
+   🖼️  图片: https://img2.baidu.com/it/u=500643173,2012953556&fm=253&fmt=auto&app=138&f=JPEG?w=500&h=1407
+   📝 提示: What characters do you see in this image and what might have happened between them?
+   ⏱️  耗时: 16.88s
+   🎯 生成Token: 189 个
+   ⚡ 速度: 11.20 tokens/s
+   💬 回复: In the image, there are two main animated characters:
+
+1. A girl with brown hair wearing a purple dress.
+2. A girl with pink hair wearing a red dress.
+
+The dialogue suggests that the girl in the purple dress has done something to the girl in the red dress, specifically kissed her. The sequence of images indicates the following events:
+
+1. The girl in the purple dress (likely named Star) says, "I kissed Star."
+2. The girl in the red dress looks surprised and asks, "What?"
+3. The girl in the purple dress explains, "Yeah, so you don't give me anything now go... Wow, no hesitation."
+
+This implies that the girl in the purple dress is trying to avoid punishment or a consequence for kissing the girl in the red dress. The girl in the red dress appears to be upset by being kissed and is now telling...
+--------------------------------------------------------------------------------
+✅ 请求 9 [09:13:34]
+   🖼️  图片: https://h.cdn.zhuolaoshi.cn/user/site26644/image/20180927/20180927072723952395.jpg
+   📝 提示: What information can you extract from this image? Please organize the extracted information into a structured format and present it.
+   ⏱️  耗时: 8.06s
+   🎯 生成Token: 70 个
+   ⚡ 速度: 8.69 tokens/s
+   💬 回复: Here is the extracted information organized into a structured format:
+
+| Student ID | Name | Credit Score | Repeat |
+|------------|------|--------------|-------|
+| xxxxxxx    | x      | 78           | No    |
+
+This table provides the student's credit score, repeat status, and other relevant details for the specified semester.
+--------------------------------------------------------------------------------
+====================================================================================================
+📊 视觉模型性能统计:
+====================================================================================================
+✅ 成功请求: 9/9
+❌ 失败请求: 0
+⏱️  总耗时: 40.30s
+🎯 总生成Token: 1316
+📝 总输入Token: 12449
+
+⏱️  响应时间统计:
+   平均: 14.03s
+   最快: 6.06s
+   最慢: 39.55s
+   中位数: 9.60s
+
+⚡ Token生成速度统计:
+   平均: 9.12 tokens/s
+   最快: 12.95 tokens/s
+   最慢: 6.93 tokens/s
+   中位数: 8.69 tokens/s
+
+🚀 整体吞吐量: 32.66 tokens/s
+📈 并发效率: 0.22 requests/s
+🖼️  图片处理效率: 0.22 images/s
+====================================================================================================
+
+Process finished with exit code 0
