@@ -16,7 +16,14 @@
 13. [解包与序列操作](#十三解包与序列操作)
 14. [高级函数特性](#十四高级函数特性)
 15. [更多高级语法](#十五更多高级语法)
-
+16. [常用内置函数](#十六常用内置函数)
+17. [常用标准库](#十七常用标准库)
+18. [实用技巧与代码片段](#十八实用技巧与代码片段)
+19. [最佳实践与代码风格 (PEP 8)](#十九最佳实践与代码风格-pep-8)
+20. [常见陷阱与误区](#二十常见陷阱与误区)
+21. [网络编程](#二十一网络编程)
+22. [数据处理与序列化](#二十二数据处理与序列化)
+23. [数据库操作](#二十三数据库操作)
 ---
 
 ## 一、基础语法
@@ -2195,14 +2202,19 @@ print(f"数量: {args.number}")
 ## 二十四、数据库操作
 
 ### SQLite（内置）
+SQLite 是一个轻量级的、无服务器的、自包含的 SQL 数据库引擎，非常适合小型应用、原型开发和数据分析。
+
 ```python
 import sqlite3
 
-# 连接数据库（不存在会创建）
+# 1. 连接数据库（如果文件不存在，会自动创建）
 conn = sqlite3.connect('example.db')
+# 创建一个游标对象，用于执行SQL语句
 cursor = conn.cursor()
 
-# 创建表
+# 2. 创建表
+# 使用 """ 多行字符串编写 SQL
+# IF NOT EXISTS 确保表只在不存在时创建，避免重复执行报错
 cursor.execute('''
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2212,11 +2224,137 @@ cursor.execute('''
     )
 ''')
 
-# 插入数据
+# 3. 插入数据
+# 使用 ? 作为占位符进行参数化查询，可以防止SQL注入，这是安全最佳实践
 cursor.execute("INSERT INTO users (name, age, email) VALUES (?, ?, ?)",
                ('Alice', 25, 'alice@example.com'))
 
 # 批量插入
-users = [
+users_to_insert = [
     ('Bob', 30, 'bob@example.com'),
-    ('Charlie', 35, 'charlie@example.
+    ('Charlie', 35, 'charlie@example.com')
+]
+cursor.executemany("INSERT INTO users (name, age, email) VALUES (?, ?, ?)", users_to_insert)
+
+# 4. 提交事务
+# 对数据库的所有修改都需要提交后才会生效
+conn.commit()
+
+# 5. 查询数据
+# 查询所有用户
+cursor.execute("SELECT * FROM users")
+all_users = cursor.fetchall()  # 获取所有结果行
+for user in all_users:
+    print(user)  # 输出: (1, 'Alice', 25, 'alice@example.com'), ...
+
+# 条件查询
+cursor.execute("SELECT name, email FROM users WHERE age > ?", (28,))
+some_users = cursor.fetchall()
+print(some_users) # 输出: [('Bob', 'bob@example.com'), ('Charlie', 'charlie@example.com')]
+
+# 查询单条记录
+cursor.execute("SELECT * FROM users WHERE name = ?", ('Alice',))
+alice = cursor.fetchone() # 获取第一条结果
+print(alice)
+
+# 6. 更新数据
+cursor.execute("UPDATE users SET age = ? WHERE name = ?", (26, 'Alice'))
+conn.commit()
+
+# 7. 删除数据
+cursor.execute("DELETE FROM users WHERE name = ?", ('Charlie',))
+conn.commit()
+
+# 8. 关闭连接
+# 操作完成后，务必关闭游标和连接
+cursor.close()
+conn.close()
+
+# 推荐使用 with 语句自动管理连接和事务
+try:
+    with sqlite3.connect('example.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO users (name, age, email) VALUES (?, ?, ?)",
+                       ('David', 40, 'david@example.com'))
+        # with 语句块结束时会自动提交事务，如果发生异常则会自动回滚
+except sqlite3.Error as e:
+    print(f"数据库错误: {e}")
+
+```
+
+#### ORM (对象关系映射) - SQLAlchemy 示例
+ORM 允许你使用 Python 对象来操作数据库，而无需编写原生 SQL 语句，使代码更具可读性和可维护性。SQLAlchemy 是 Python 中最流行的 ORM 框架。
+
+首先，你需要安装它：`pip install sqlalchemy`
+
+```python
+from sqlalchemy import create_engine, Column, Integer, String
+from sqlalchemy.orm import sessionmaker, declarative_base
+
+# 1. 设置数据库连接
+# 创建一个引擎，连接到我们的 SQLite 数据库
+engine = create_engine('sqlite:///example.db')
+
+# 2. 定义数据模型 (ORM 类)
+# 创建一个基类，我们的 ORM 模型将继承它
+Base = declarative_base()
+
+class User(Base):
+    __tablename__ = 'users'  # 关联到数据库中的 'users' 表
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    age = Column(Integer)
+    email = Column(String, unique=True)
+
+    def __repr__(self):
+        return f"<User(name='{self.name}', age={self.age})>"
+
+# 3. 创建表结构 (如果不存在)
+# 这会检查数据库，并创建所有继承自 Base 的模型对应的表
+Base.metadata.create_all(engine)
+
+# 4. 创建会话 (Session)
+# Session 是与数据库交互的主要入口
+Session = sessionmaker(bind=engine)
+session = Session()
+
+# 5. 插入数据 (创建对象)
+new_user_eve = User(name='Eve', age=28, email='eve@example.com')
+session.add(new_user_eve)
+
+# 批量添加
+session.add_all([
+    User(name='Frank', age=45, email='frank@example.com'),
+    User(name='Grace', age=32, email='grace@example.com')
+])
+
+session.commit() # 提交事务
+
+# 6. 查询数据 (查询对象)
+# 查询所有用户
+all_users = session.query(User).all()
+print(all_users)
+
+# 条件查询
+users_over_30 = session.query(User).filter(User.age > 30).all()
+print(users_over_30)
+
+# 查询第一个匹配项
+frank = session.query(User).filter_by(name='Frank').first()
+print(frank)
+
+# 7. 更新数据 (修改对象属性)
+if frank:
+    frank.age = 46
+    session.commit()
+
+# 8. 删除数据
+grace = session.query(User).filter_by(name='Grace').first()
+if grace:
+    session.delete(grace)
+    session.commit()
+
+# 9. 关闭会话
+session.close()
+```
