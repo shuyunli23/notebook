@@ -2501,530 +2501,9 @@ class DQN:
             return q_values.argmax().item()
     
     def train_step(self):
-        """单步训练"""
+        """SAC训练步骤"""
         if len(self.replay_buffer) < self.batch_size:
             return None
-        
-        # 采样批量经验
-        states, actions, rewards, next_states, dones = \
-            self.replay_buffer.sample(self.batch_size)
-        
-        # 当前Q值
-        q_values = self.q_net(states).gather(1, actions.unsqueeze(1)).squeeze()
-        
-        # 目标Q值（使用目标网络）
-        with torch.no_grad():
-            next_q_values = self.target_net(next_states).max(1)[0]
-            target_q_values = rewards + self.gamma * next_q_values * (1 - dones)
-        
-        # 计算损失
-        loss = nn.MSELoss()(q_values, target_q_values)
-        
-        # 反向传播
-        self.optimizer.zero_grad()
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.q_net.parameters(), 1.0)
-        self.optimizer.step()
-        
-        # 更新目标网络
-        self.update_counter += 1
-        if self.update_counter % self.target_update == 0:
-            self.target_net.load_state_dict(self.q_net.state_dict())
-        
-        return loss.item()
-    
-    def train(self, env, num_episodes=1000):
-        """训练DQN"""
-        episode_rewards = []
-        
-        for episode in range(num_episodes):
-            state = env.reset()
-            total_reward = 0
-            done = False
-            
-            while not done:
-                # 选择动作
-                action = self.select_action(state)
-                
-                # 执行动作
-                next_state, reward, done, _ = env.step(action)
-                total_reward += reward
-                
-                # 存储经验
-                self.replay_buffer.push(state, action, reward, next_state, done)
-                
-                # 训练
-                loss = self.train_step()
-                
-                state = next_state
-            
-            # ε衰减
-            self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
-            
-            episode_rewards.append(total_reward)
-            
-            if (episode + 1) % 100 == 0:
-                avg_reward = np.mean(episode_rewards[-100:])
-                print(f"Episode {episode+1}, Avg Reward: {avg_reward:.2f}, Epsilon: {self.epsilon:.3f}")
-        
-        return episode_rewards
-```
-
-### 9.2 Double DQN
-
-```python
-class DoubleDQN(DQN):
-    """
-    Double DQN：解决Q值过估计问题
-    
-    使用在线网络选择动作，目标网络评估Q值
-    Q_target = r + γ * Q_target(s', argmax_a Q(s',a))
-    """
-    def train_step(self):
-        """Double DQN训练步骤"""
-        if len(self.replay_buffer) < self.batch_size:
-            return None
-        
-        states, actions, rewards, next_states, dones = \
-            self.replay_buffer.sample(self.batch_size)
-        
-        # 当前Q值
-        q_values = self.q_net(states).gather(1, actions.unsqueeze(1)).squeeze()
-        
-        # Double DQN目标
-        with torch.no_grad():
-            # 使用在线网络选择动作
-            next_actions = self.q_net(next_states).argmax(1)
-            # 使用目标网络评估Q值
-            next_q_values = self.target_net(next_states).gather(1, next_actions.unsqueeze(1)).squeeze()
-            target_q_values = rewards + self.gamma * next_q_values * (1 - dones)
-        
-        loss = nn.MSELoss()(q_values, target_q_values)
-        
-        self.optimizer.zero_grad()
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.q_net.parameters(), 1.0)
-        self.optimizer.step()
-        
-        self.update_counter += 1
-        if self.update_counter % self.target_update == 0:
-            self.target_net.load_state_dict(self.q_net.state_dict())
-        
-        return loss.item()
-```
-
-### 9.3 Dueling DQN
-
-```python
-class DuelingDQNNetwork(nn.Module):
-    """
-    Dueling DQN网络
-    Q(s,a) = V(s) + A(s,a) - mean(A(s,·))
-    """
-    def __init__(self, state_dim, action_dim, hidden_dim=128):
-        super(DuelingDQNNetwork, self).__init__()
-        
-        # 共享特征提取层
-        self.feature = nn.Sequential(
-            nn.Linear(state_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU()
-        )
-        
-        # 价值流 V(s)
-        self.value_stream = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, 1)
-        )
-        
-        # 优势流 A(s,a)
-        self.advantage_stream = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, action_dim)
-        )
-    
-    def forward(self, state):
-        features = self.feature(state)
-        value = self.value_stream(features)
-        advantages = self.advantage_stream(features)
-        
-        # 结合：Q = V + (A - mean(A))
-        q_values = value + (advantages - advantages.mean(dim=-1, keepdim=True))
-        return q_values
-```
-
-### 9.4 Prioritized Experience Replay
-
-```python
-class SumTree:
-    """求和树：用于优先级采样"""
-    def __init__(self, capacity):
-        self.capacity = capacity
-        self.tree = np.zeros(2 * capacity - 1)
-        self.data = np.zeros(capacity, dtype=object)
-        self.write_idx = 0
-        self.n_entries = 0
-    
-    def _propagate(self, idx, change):
-        """向上传播优先级变化"""
-        parent = (idx - 1) // 2
-        self.tree[parent] += change
-        if parent != 0:
-            self._propagate(parent, change)
-    
-    def update(self, idx, priority):
-        """更新优先级"""
-        change = priority - self.tree[idx]
-        self.tree[idx] = priority
-        self._propagate(idx, change)
-    
-    def add(self, priority, data):
-        """添加数据"""
-        idx = self.write_idx + self.capacity - 1
-        self.data[self.write_idx] = data
-        self.update(idx, priority)
-        
-        self.write_idx = (self.write_idx + 1) % self.capacity
-        self.n_entries = min(self.n_entries + 1, self.capacity)
-    
-    def get(self, s):
-        """根据优先级采样"""
-        idx = self._retrieve(0, s)
-        data_idx = idx - self.capacity + 1
-        return idx, self.tree[idx], self.data[data_idx]
-    
-    def _retrieve(self, idx, s):
-        """检索叶节点"""
-        left = 2 * idx + 1
-        right = left + 1
-        
-        if left >= len(self.tree):
-            return idx
-        
-        if s <= self.tree[left]:
-            return self._retrieve(left, s)
-        else:
-            return self._retrieve(right, s - self.tree[left])
-    
-    @property
-    def total_priority(self):
-        return self.tree[0]
-
-class PrioritizedReplayBuffer:
-    """
-    优先级经验回放
-    根据TD误差分配采样优先级
-    """
-    def __init__(self, capacity, alpha=0.6, beta=0.4, beta_increment=0.001):
-        self.tree = SumTree(capacity)
-        self.capacity = capacity
-        self.alpha = alpha  # 优先级指数
-        self.beta = beta    # 重要性采样权重
-        self.beta_increment = beta_increment
-        self.max_priority = 1.0
-        self.epsilon = 0.01
-    
-    def push(self, state, action, reward, next_state, done):
-        """添加经验（使用最大优先级）"""
-        data = Transition(state, action, reward, next_state, done)
-        priority = self.max_priority
-        self.tree.add(priority, data)
-    
-    def sample(self, batch_size):
-        """根据优先级采样"""
-        batch = []
-        idxs = []
-        priorities = []
-        segment = self.tree.total_priority / batch_size
-        
-        # 增加β
-        self.beta = min(1.0, self.beta + self.beta_increment)
-        
-        for i in range(batch_size):
-            a = segment * i
-            b = segment * (i + 1)
-            s = random.uniform(a, b)
-            
-            idx, priority, data = self.tree.get(s)
-            batch.append(data)
-            idxs.append(idx)
-            priorities.append(priority)
-        
-        # 计算重要性采样权重
-        sampling_probs = np.array(priorities) / self.tree.total_priority
-        is_weights = np.power(self.tree.n_entries * sampling_probs, -self.beta)
-        is_weights /= is_weights.max()
-        
-        # 转换为张量
-        transitions = Transition(*zip(*batch))
-        states = torch.FloatTensor(transitions.state)
-        actions = torch.LongTensor(transitions.action)
-        rewards = torch.FloatTensor(transitions.reward)
-        next_states = torch.FloatTensor(transitions.next_state)
-        dones = torch.FloatTensor(transitions.done)
-        is_weights = torch.FloatTensor(is_weights)
-        
-        return states, actions, rewards, next_states, dones, idxs, is_weights
-    
-    def update_priorities(self, idxs, td_errors):
-        """更新优先级"""
-        for idx, td_error in zip(idxs, td_errors):
-            priority = (abs(td_error) + self.epsilon) ** self.alpha
-            self.max_priority = max(self.max_priority, priority)
-            self.tree.update(idx, priority)
-    
-    def __len__(self):
-        return self.tree.n_entries
-```
-
----
-
-## 十、高级算法
-
-### 10.1 PPO (Proximal Policy Optimization)
-
-```python
-class PPO:
-    """
-    PPO：近端策略优化
-    
-    使用裁剪目标函数限制策略更新幅度
-    L^CLIP(θ) = E[min(r_t(θ)A_t, clip(r_t(θ), 1-ε, 1+ε)A_t)]
-    
-    其中 r_t(θ) = π_θ(a_t|s_t) / π_θ_old(a_t|s_t)
-    """
-    def __init__(self, state_dim, action_dim, lr=3e-4, gamma=0.99, 
-                 epsilon=0.2, value_coef=0.5, entropy_coef=0.01,
-                 gae_lambda=0.95, epochs=10, batch_size=64):
-        
-        self.actor_critic = ActorCriticNetwork(state_dim, action_dim)
-        self.optimizer = optim.Adam(self.actor_critic.parameters(), lr=lr)
-        
-        self.gamma = gamma
-        self.epsilon = epsilon
-        self.value_coef = value_coef
-        self.entropy_coef = entropy_coef
-        self.gae_lambda = gae_lambda
-        self.epochs = epochs
-        self.batch_size = batch_size
-    
-    def select_action(self, state):
-        """选择动作"""
-        state = torch.FloatTensor(state).unsqueeze(0)
-        
-        with torch.no_grad():
-            action_probs, value = self.actor_critic(state)
-            dist = Categorical(action_probs)
-            action = dist.sample()
-            log_prob = dist.log_prob(action)
-        
-        return action.item(), log_prob.item(), value.item()
-    
-    def compute_gae(self, rewards, values, dones):
-        """
-        计算GAE (Generalized Advantage Estimation)
-        A_t = δ_t + (γλ)δ_{t+1} + (γλ)²δ_{t+2} + ...
-        其中 δ_t = r_t + γV(s_{t+1}) - V(s_t)
-        """
-        advantages = []
-        gae = 0
-        
-        for t in reversed(range(len(rewards))):
-            if t == len(rewards) - 1:
-                next_value = 0
-            else:
-                next_value = values[t + 1]
-            
-            delta = rewards[t] + self.gamma * next_value * (1 - dones[t]) - values[t]
-            gae = delta + self.gamma * self.gae_lambda * (1 - dones[t]) * gae
-            advantages.insert(0, gae)
-        
-        return advantages
-    
-    def update(self, states, actions, old_log_probs, returns, advantages):
-        """PPO更新"""
-        states = torch.FloatTensor(states)
-        actions = torch.LongTensor(actions)
-        old_log_probs = torch.FloatTensor(old_log_probs)
-        returns = torch.FloatTensor(returns)
-        advantages = torch.FloatTensor(advantages)
-        
-        # 标准化优势
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
-        
-        # 多次更新
-        for _ in range(self.epochs):
-            # 随机打乱
-            indices = torch.randperm(len(states))
-            
-            for start in range(0, len(states), self.batch_size):
-                end = start + self.batch_size
-                batch_indices = indices[start:end]
-                
-                batch_states = states[batch_indices]
-                batch_actions = actions[batch_indices]
-                batch_old_log_probs = old_log_probs[batch_indices]
-                batch_returns = returns[batch_indices]
-                batch_advantages = advantages[batch_indices]
-                
-                # 前向传播
-                action_probs, values = self.actor_critic(batch_states)
-                dist = Categorical(action_probs)
-                log_probs = dist.log_prob(batch_actions)
-                entropy = dist.entropy().mean()
-                
-                # 计算比率
-                ratio = torch.exp(log_probs - batch_old_log_probs)
-                
-                # PPO裁剪目标
-                surr1 = ratio * batch_advantages
-                surr2 = torch.clamp(ratio, 1 - self.epsilon, 1 + self.epsilon) * batch_advantages
-                actor_loss = -torch.min(surr1, surr2).mean()
-                
-                # 价值函数损失
-                critic_loss = F.mse_loss(values.squeeze(), batch_returns)
-                
-                # 总损失
-                loss = actor_loss + self.value_coef * critic_loss - self.entropy_coef * entropy
-                
-                # 更新
-                self.optimizer.zero_grad()
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.actor_critic.parameters(), 0.5)
-                self.optimizer.step()
-    
-    def train(self, env, num_episodes=1000, max_steps=1000):
-        """训练PPO"""
-        episode_rewards = []
-        
-        for episode in range(num_episodes):
-            states, actions, rewards, log_probs, values, dones = [], [], [], [], [], []
-            
-            state = env.reset()
-            
-            for step in range(max_steps):
-                action, log_prob, value = self.select_action(state)
-                next_state, reward, done, _ = env.step(action)
-                
-                states.append(state)
-                actions.append(action)
-                rewards.append(reward)
-                log_probs.append(log_prob)
-                values.append(value)
-                dones.append(done)
-                
-                state = next_state
-                
-                if done:
-                    break
-            
-            # 计算回报和优势
-            advantages = self.compute_gae(rewards, values, dones)
-            returns = [adv + val for adv, val in zip(advantages, values)]
-            
-            # 更新策略
-            self.update(states, actions, log_probs, returns, advantages)
-            
-            episode_rewards.append(sum(rewards))
-            
-            if (episode + 1) % 100 == 0:
-                avg_reward = np.mean(episode_rewards[-100:])
-                print(f"Episode {episode+1}, Avg Reward: {avg_reward:.2f}")
-        
-        return episode_rewards
-```
-
-### 10.2 DDPG (Deep Deterministic Policy Gradient)
-
-```python
-class DDPGActor(nn.Module):
-    """DDPG Actor网络（确定性策略）"""
-    def __init__(self, state_dim, action_dim, max_action, hidden_dim=256):
-        super(DDPGActor, self).__init__()
-        
-        self.network = nn.Sequential(
-            nn.Linear(state_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, action_dim),
-            nn.Tanh()
-        )
-        
-        self.max_action = max_action
-    
-    def forward(self, state):
-        return self.max_action * self.network(state)
-
-class DDPGCritic(nn.Module):
-    """DDPG Critic网络（Q函数）"""
-    def __init__(self, state_dim, action_dim, hidden_dim=256):
-        super(DDPGCritic, self).__init__()
-        
-        self.network = nn.Sequential(
-            nn.Linear(state_dim + action_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, 1)
-        )
-    
-    def forward(self, state, action):
-        return self.network(torch.cat([state, action], dim=-1))
-
-class DDPG:
-    """
-    DDPG：深度确定性策略梯度
-    适用于连续动作空间
-    
-    关键技术：
-    1. Actor-Critic架构
-    2. 目标网络
-    3. 经验回放
-    4. OU噪声探索
-    """
-    def __init__(self, state_dim, action_dim, max_action,
-                 actor_lr=1e-4, critic_lr=1e-3, gamma=0.99, tau=0.005,
-                 buffer_size=100000, batch_size=64):
-        
-        # Actor网络
-        self.actor = DDPGActor(state_dim, action_dim, max_action)
-        self.actor_target = DDPGActor(state_dim, action_dim, max_action)
-        self.actor_target.load_state_dict(self.actor.state_dict())
-        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=actor_lr)
-        
-        # Critic网络
-        self.critic = DDPGCritic(state_dim, action_dim)
-        self.critic_target = DDPGCritic(state_dim, action_dim)
-        self.critic_target.load_state_dict(self.critic.state_dict())
-        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=critic_lr)
-        
-        self.replay_buffer = ReplayBuffer(buffer_size)
-        
-        self.gamma = gamma
-        self.tau = tau
-        self.batch_size = batch_size
-        self.max_action = max_action
-    
-    def select_action(self, state, noise=0.1):
-        """选择动作（带噪声）"""
-        state = torch.FloatTensor(state).unsqueeze(0)
-        action = self.actor(state).detach().numpy()[0]
-        
-        # 添加探索噪声
-        if noise > 0:
-            action += np.random.normal(0, noise, size=action.shape)
-            action = np.clip(action, -self.max_action, self.max_action)
-        
-        return action
-    
-    def train_step(self):
-        """训练步骤"""
-        if len(self.replay_buffer) < self.batch_size:
-            return None, None
         
         # 采样
         states, actions, rewards, next_states, dones = \
@@ -3032,58 +2511,127 @@ class DDPG:
         
         # 更新Critic
         with torch.no_grad():
-            next_actions = self.actor_target(next_states)
-            target_q = self.critic_target(next_states, next_actions)
+            next_actions, next_log_probs, _ = self.actor.sample(next_states)
+            target_q1 = self.critic1_target(next_states, next_actions)
+            target_q2 = self.critic2_target(next_states, next_actions)
+            target_q = torch.min(target_q1, target_q2) - self.alpha * next_log_probs
             target_q = rewards.unsqueeze(1) + self.gamma * target_q * (1 - dones.unsqueeze(1))
         
-        current_q = self.critic(states, actions)
-        critic_loss = F.mse_loss(current_q, target_q)
+        current_q1 = self.critic1(states, actions)
+        current_q2 = self.critic2(states, actions)
         
-        self.critic_optimizer.zero_grad()
-        critic_loss.backward()
-        self.critic_optimizer.step()
+        critic1_loss = F.mse_loss(current_q1, target_q)
+        critic2_loss = F.mse_loss(current_q2, target_q)
+        
+        self.critic1_optimizer.zero_grad()
+        critic1_loss.backward()
+        self.critic1_optimizer.step()
+        
+        self.critic2_optimizer.zero_grad()
+        critic2_loss.backward()
+        self.critic2_optimizer.step()
         
         # 更新Actor
-        actor_loss = -self.critic(states, self.actor(states)).mean()
+        new_actions, log_probs, _ = self.actor.sample(states)
+        q1_new = self.critic1(states, new_actions)
+        q2_new = self.critic2(states, new_actions)
+        q_new = torch.min(q1_new, q2_new)
+        
+        actor_loss = (self.alpha * log_probs - q_new).mean()
         
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
         
-        # 软更新目标网络
-        self.soft_update(self.actor, self.actor_target)
-        self.soft_update(self.critic, self.critic_target)
+        # 更新温度参数
+        if self.auto_entropy:
+            alpha_loss = -(self.log_alpha * (log_probs + self.target_entropy).detach()).mean()
+            
+            self.alpha_optimizer.zero_grad()
+            alpha_loss.backward()
+            self.alpha_optimizer.step()
+            
+            self.alpha = self.log_alpha.exp().item()
         
-        return actor_loss.item(), critic_loss.item()
+        # 软更新目标网络
+        self.soft_update(self.critic1, self.critic1_target)
+        self.soft_update(self.critic2, self.critic2_target)
+        
+        return actor_loss.item(), critic1_loss.item(), critic2_loss.item()
     
     def soft_update(self, source, target):
-        """软更新：θ' ← τθ + (1-τ)θ'"""
+        """软更新目标网络"""
         for param, target_param in zip(source.parameters(), target.parameters()):
             target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+
+class GaussianPolicy(nn.Module):
+    """高斯策略网络"""
+    def __init__(self, state_dim, action_dim, max_action, hidden_dim=256):
+        super(GaussianPolicy, self).__init__()
+        
+        self.network = nn.Sequential(
+            nn.Linear(state_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU()
+        )
+        
+        self.mean = nn.Linear(hidden_dim, action_dim)
+        self.log_std = nn.Linear(hidden_dim, action_dim)
+        
+        self.max_action = max_action
+    
+    def forward(self, state):
+        x = self.network(state)
+        mean = self.mean(x)
+        log_std = self.log_std(x)
+        log_std = torch.clamp(log_std, -20, 2)
+        return mean, log_std
+    
+    def sample(self, state):
+        """采样动作"""
+        mean, log_std = self.forward(state)
+        std = log_std.exp()
+        
+        # 重参数化技巧
+        normal = torch.distributions.Normal(mean, std)
+        x_t = normal.rsample()
+        action = torch.tanh(x_t)
+        
+        # 计算log概率
+        log_prob = normal.log_prob(x_t)
+        log_prob -= torch.log(1 - action.pow(2) + 1e-6)
+        log_prob = log_prob.sum(dim=-1, keepdim=True)
+        
+        action = action * self.max_action
+        mean = torch.tanh(mean) * self.max_action
+        
+        return action, log_prob, mean
 ```
 
-### 10.3 SAC (Soft Actor-Critic)
+### 10.4 TD3 (Twin Delayed DDPG)
 
 ```python
-class SAC:
+class TD3:
     """
-    SAC：软Actor-Critic
-    最大化熵正则化的目标：J = E[Σ(r_t + α*H(π(·|s_t)))]
+    TD3：双延迟DDPG
     
-    关键特点：
-    1. 最大熵强化学习
-    2. 自动温度调节
-    3. 双Q网络（减少过估计）
+    改进：
+    1. 双Critic网络（减少过估计）
+    2. 延迟策略更新
+    3. 目标策略平滑
     """
     def __init__(self, state_dim, action_dim, max_action,
-                 actor_lr=3e-4, critic_lr=3e-4, alpha_lr=3e-4,
-                 gamma=0.99, tau=0.005, alpha=0.2, auto_entropy=True):
+                 actor_lr=1e-3, critic_lr=1e-3, gamma=0.99, tau=0.005,
+                 policy_noise=0.2, noise_clip=0.5, policy_delay=2):
         
-        # Actor网络（输出高斯分布参数）
-        self.actor = GaussianPolicy(state_dim, action_dim, max_action)
+        # Actor
+        self.actor = DDPGActor(state_dim, action_dim, max_action)
+        self.actor_target = DDPGActor(state_dim, action_dim, max_action)
+        self.actor_target.load_state_dict(self.actor.state_dict())
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=actor_lr)
         
-        # 双Critic网络
+        # 双Critic
         self.critic1 = DDPGCritic(state_dim, action_dim)
         self.critic2 = DDPGCritic(state_dim, action_dim)
         self.critic1_target = DDPGCritic(state_dim, action_dim)
@@ -3095,28 +2643,1392 @@ class SAC:
         self.critic1_optimizer = optim.Adam(self.critic1.parameters(), lr=critic_lr)
         self.critic2_optimizer = optim.Adam(self.critic2.parameters(), lr=critic_lr)
         
-        # 温度参数
-        self.alpha = alpha
-        self.auto_entropy = auto_entropy
-        if auto_entropy:
-            self.target_entropy = -action_dim
-            self.log_alpha = torch.zeros(1, requires_grad=True)
-            self.alpha_optimizer = optim.Adam([self.log_alpha], lr=alpha_lr)
+        self.max_action = max_action
+        self.gamma = gamma
+        self.tau = tau
+        self.policy_noise = policy_noise
+        self.noise_clip = noise_clip
+        self.policy_delay = policy_delay
+        
+        self.replay_buffer = ReplayBuffer(100000)
+        self.batch_size = 256
+        self.total_iterations = 0
+    
+    def select_action(self, state, noise=0.1):
+        """选择动作"""
+        state = torch.FloatTensor(state).unsqueeze(0)
+        action = self.actor(state).detach().numpy()[0]
+        
+        if noise > 0:
+            action += np.random.normal(0, noise, size=action.shape)
+            action = np.clip(action, -self.max_action, self.max_action)
+        
+        return action
+    
+    def train_step(self):
+        """TD3训练步骤"""
+        if len(self.replay_buffer) < self.batch_size:
+            return None
+        
+        self.total_iterations += 1
+        
+        # 采样
+        states, actions, rewards, next_states, dones = \
+            self.replay_buffer.sample(self.batch_size)
+        
+        # 更新Critic
+        with torch.no_grad():
+            # 目标策略平滑
+            noise = (torch.randn_like(actions) * self.policy_noise).clamp(
+                -self.noise_clip, self.noise_clip
+            )
+            next_actions = (self.actor_target(next_states) + noise).clamp(
+                -self.max_action, self.max_action
+            )
+            
+            # 计算目标Q值（取最小值）
+            target_q1 = self.critic1_target(next_states, next_actions)
+            target_q2 = self.critic2_target(next_states, next_actions)
+            target_q = torch.min(target_q1, target_q2)
+            target_q = rewards.unsqueeze(1) + self.gamma * target_q * (1 - dones.unsqueeze(1))
+        
+        # 更新两个Critic
+        current_q1 = self.critic1(states, actions)
+        current_q2 = self.critic2(states, actions)
+        
+        critic1_loss = F.mse_loss(current_q1, target_q)
+        critic2_loss = F.mse_loss(current_q2, target_q)
+        
+        self.critic1_optimizer.zero_grad()
+        critic1_loss.backward()
+        self.critic1_optimizer.step()
+        
+        self.critic2_optimizer.zero_grad()
+        critic2_loss.backward()
+        self.critic2_optimizer.step()
+        
+        # 延迟策略更新
+        if self.total_iterations % self.policy_delay == 0:
+            # 更新Actor
+            actor_loss = -self.critic1(states, self.actor(states)).mean()
+            
+            self.actor_optimizer.zero_grad()
+            actor_loss.backward()
+            self.actor_optimizer.step()
+            
+            # 软更新目标网络
+            self.soft_update(self.actor, self.actor_target)
+            self.soft_update(self.critic1, self.critic1_target)
+            self.soft_update(self.critic2, self.critic2_target)
+            
+            return actor_loss.item(), critic1_loss.item()
+        
+        return None, critic1_loss.item()
+    
+    def soft_update(self, source, target):
+        """软更新"""
+        for param, target_param in zip(source.parameters(), target.parameters()):
+            target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+```
+
+---
+
+## 十一、多智能体强化学习
+
+### 11.1 独立学习
+
+```python
+class IndependentQLearning:
+    """
+    独立Q学习：每个智能体独立学习
+    将其他智能体视为环境的一部分
+    """
+    def __init__(self, num_agents, state_dim, action_dim, lr=0.1, gamma=0.99, epsilon=0.1):
+        self.num_agents = num_agents
+        self.agents = [
+            QLearning(None, gamma, lr, epsilon) 
+            for _ in range(num_agents)
+        ]
+    
+    def select_actions(self, states):
+        """所有智能体选择动作"""
+        return [agent.select_action(state) for agent, state in zip(self.agents, states)]
+    
+    def update(self, states, actions, rewards, next_states, dones):
+        """更新所有智能体"""
+        for i, agent in enumerate(self.agents):
+            agent.update_q(states[i], actions[i], rewards[i], next_states[i], dones[i])
+```
+
+### 11.2 MADDPG (Multi-Agent DDPG)
+
+```python
+class MADDPG:
+    """
+    MADDPG：多智能体DDPG
+    
+    关键思想：
+    - 集中式训练（Critic看到全局信息）
+    - 分布式执行（Actor只用局部信息）
+    """
+    def __init__(self, num_agents, state_dims, action_dims, 
+                 actor_lr=1e-4, critic_lr=1e-3, gamma=0.99, tau=0.01):
+        
+        self.num_agents = num_agents
+        self.agents = []
+        
+        # 全局状态和动作维度
+        total_state_dim = sum(state_dims)
+        total_action_dim = sum(action_dims)
+        
+        for i in range(num_agents):
+            agent = {
+                'actor': DDPGActor(state_dims[i], action_dims[i], 1.0),
+                'actor_target': DDPGActor(state_dims[i], action_dims[i], 1.0),
+                'critic': DDPGCritic(total_state_dim, total_action_dim),
+                'critic_target': DDPGCritic(total_state_dim, total_action_dim),
+                'actor_optimizer': None,
+                'critic_optimizer': None
+            }
+            
+            agent['actor_target'].load_state_dict(agent['actor'].state_dict())
+            agent['critic_target'].load_state_dict(agent['critic'].state_dict())
+            
+            agent['actor_optimizer'] = optim.Adam(agent['actor'].parameters(), lr=actor_lr)
+            agent['critic_optimizer'] = optim.Adam(agent['critic'].parameters(), lr=critic_lr)
+            
+            self.agents.append(agent)
         
         self.gamma = gamma
         self.tau = tau
         self.replay_buffer = ReplayBuffer(100000)
-        self.batch_size = 256
+        self.batch_size = 1024
     
-    def select_action(self, state, deterministic=False):
-        """选择动作"""
-        state = torch.FloatTensor(state).unsqueeze(0)
+    def select_actions(self, states, noise=0.0):
+        """所有智能体选择动作"""
+        actions = []
+        for i, state in enumerate(states):
+            state_tensor = torch.FloatTensor(state).unsqueeze(0)
+            action = self.agents[i]['actor'](state_tensor).detach().numpy()[0]
+            
+            if noise > 0:
+                action += np.random.normal(0, noise, size=action.shape)
+            
+            actions.append(action)
         
-        if deterministic:
-            _, _, action = self.actor.sample(state)
-        else:
-            action, _, _ = self.actor.sample(state)
-        
-        return action.detach().numpy()[0]
+        return actions
     
     def train_step(self):
+        """MADDPG训练步骤"""
+        if len(self.replay_buffer) < self.batch_size:
+            return None
+        
+        # 采样（假设buffer存储了全局信息）
+        states, actions, rewards, next_states, dones = \
+            self.replay_buffer.sample(self.batch_size)
+        
+        # states: [batch, num_agents, state_dim]
+        # actions: [batch, num_agents, action_dim]
+        
+        # 展平全局状态和动作
+        batch_size = states.shape[0]
+        global_states = states.reshape(batch_size, -1)
+        global_actions = actions.reshape(batch_size, -1)
+        global_next_states = next_states.reshape(batch_size, -1)
+        
+        for agent_id in range(self.num_agents):
+            agent = self.agents[agent_id]
+            
+            # 更新Critic（使用全局信息）
+            with torch.no_grad():
+                # 获取所有智能体的下一个动作
+                next_actions_list = []
+                for i in range(self.num_agents):
+                    next_action = self.agents[i]['actor_target'](next_states[:, i])
+                    next_actions_list.append(next_action)
+                
+                global_next_actions = torch.cat(next_actions_list, dim=-1)
+                
+                target_q = agent['critic_target'](global_next_states, global_next_actions)
+                target_q = rewards[:, agent_id].unsqueeze(1) + \
+                          self.gamma * target_q * (1 - dones[:, agent_id].unsqueeze(1))
+            
+            current_q = agent['critic'](global_states, global_actions)
+            critic_loss = F.mse_loss(current_q, target_q)
+            
+            agent['critic_optimizer'].zero_grad()
+            critic_loss.backward()
+            agent['critic_optimizer'].step()
+            
+            # 更新Actor（只用局部状态）
+            # 构造当前智能体的动作，其他智能体动作来自当前策略
+            actions_list = []
+            for i in range(self.num_agents):
+                if i == agent_id:
+                    action = agent['actor'](states[:, i])
+                else:
+                    action = self.agents[i]['actor'](states[:, i]).detach()
+                actions_list.append(action)
+            
+            global_actions_for_actor = torch.cat(actions_list, dim=-1)
+            
+            actor_loss = -agent['critic'](global_states, global_actions_for_actor).mean()
+            
+            agent['actor_optimizer'].zero_grad()
+            actor_loss.backward()
+            agent['actor_optimizer'].step()
+            
+            # 软更新
+            self.soft_update(agent['actor'], agent['actor_target'])
+            self.soft_update(agent['critic'], agent['critic_target'])
+    
+    def soft_update(self, source, target):
+        """软更新"""
+        for param, target_param in zip(source.parameters(), target.parameters()):
+            target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+```
+
+---
+
+## 十二、模型学习
+
+### 12.1 Dyna-Q
+
+```python
+class DynaQ:
+    """
+    Dyna-Q：结合模型学习和无模型学习
+    
+    流程：
+    1. 与环境交互（真实经验）
+    2. 更新Q值
+    3. 更新环境模型
+    4. 用模型生成模拟经验
+    5. 用模拟经验更新Q值
+    """
+    def __init__(self, state_dim, action_dim, lr=0.1, gamma=0.99, 
+                 epsilon=0.1, planning_steps=5):
+        
+        self.Q = {}
+        self.model = {}  # model[s][a] = (r, s')
+        
+        self.lr = lr
+        self.gamma = gamma
+        self.epsilon = epsilon
+        self.planning_steps = planning_steps
+        
+        self.action_dim = action_dim
+        self.visited_states = set()
+    
+    def select_action(self, state):
+        """ε-贪心选择动作"""
+        if random.random() < self.epsilon:
+            return random.randrange(self.action_dim)
+        
+        if state not in self.Q or len(self.Q[state]) == 0:
+            return random.randrange(self.action_dim)
+        
+        return max(self.Q[state], key=self.Q[state].get)
+    
+    def update(self, state, action, reward, next_state, done):
+        """Dyna-Q更新"""
+        # 1. 直接RL更新（真实经验）
+        if state not in self.Q:
+            self.Q[state] = {}
+        if action not in self.Q[state]:
+            self.Q[state][action] = 0
+        
+        if not done:
+            if next_state not in self.Q or len(self.Q[next_state]) == 0:
+                max_next_q = 0
+            else:
+                max_next_q = max(self.Q[next_state].values())
+            td_target = reward + self.gamma * max_next_q
+        else:
+            td_target = reward
+        
+        self.Q[state][action] += self.lr * (td_target - self.Q[state][action])
+        
+        # 2. 更新模型
+        if state not in self.model:
+            self.model[state] = {}
+        self.model[state][action] = (reward, next_state, done)
+        self.visited_states.add(state)
+        
+        # 3. 规划（使用模型生成模拟经验）
+        for _ in range(self.planning_steps):
+            # 随机选择访问过的状态
+            s = random.choice(list(self.visited_states))
+            
+            # 随机选择该状态下执行过的动作
+            if s not in self.model or len(self.model[s]) == 0:
+                continue
+            
+            a = random.choice(list(self.model[s].keys()))
+            
+            # 从模型获取转移
+            r, s_next, d = self.model[s][a]
+            
+            # 更新Q值（模拟经验）
+            if s not in self.Q:
+                self.Q[s] = {}
+            if a not in self.Q[s]:
+                self.Q[s][a] = 0
+            
+            if not d:
+                if s_next not in self.Q or len(self.Q[s_next]) == 0:
+                    max_next_q = 0
+                else:
+                    max_next_q = max(self.Q[s_next].values())
+                td_target = r + self.gamma * max_next_q
+            else:
+                td_target = r
+            
+            self.Q[s][a] += self.lr * (td_target - self.Q[s][a])
+```
+
+### 12.2 世界模型
+
+```python
+class WorldModel(nn.Module):
+    """
+    世界模型：学习环境动态
+    预测下一个状态和奖励
+    """
+    def __init__(self, state_dim, action_dim, hidden_dim=256):
+        super(WorldModel, self).__init__()
+        
+        self.network = nn.Sequential(
+            nn.Linear(state_dim + action_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU()
+        )
+        
+        # 预测下一个状态
+        self.next_state_head = nn.Linear(hidden_dim, state_dim)
+        
+        # 预测奖励
+        self.reward_head = nn.Linear(hidden_dim, 1)
+        
+        # 预测终止
+        self.done_head = nn.Linear(hidden_dim, 1)
+    
+    def forward(self, state, action):
+        """
+        预测：(next_state, reward, done)
+        """
+        x = torch.cat([state, action], dim=-1)
+        features = self.network(x)
+        
+        next_state = self.next_state_head(features)
+        reward = self.reward_head(features)
+        done = torch.sigmoid(self.done_head(features))
+        
+        return next_state, reward, done
+
+class MBPO:
+    """
+    Model-Based Policy Optimization
+    结合模型学习和策略优化
+    """
+    def __init__(self, state_dim, action_dim, max_action):
+        # 世界模型
+        self.world_model = WorldModel(state_dim, action_dim)
+        self.model_optimizer = optim.Adam(self.world_model.parameters(), lr=1e-3)
+        
+        # 策略（使用SAC）
+        self.policy = SAC(state_dim, action_dim, max_action)
+        
+        # 真实和模拟经验缓冲区
+        self.real_buffer = ReplayBuffer(100000)
+        self.model_buffer = ReplayBuffer(100000)
+    
+    def train_world_model(self, num_epochs=5):
+        """训练世界模型"""
+        for _ in range(num_epochs):
+            if len(self.real_buffer) < 256:
+                continue
+            
+            states, actions, rewards, next_states, dones = \
+                self.real_buffer.sample(256)
+            
+            # 预测
+            pred_next_states, pred_rewards, pred_dones = \
+                self.world_model(states, actions)
+            
+            # 计算损失
+            state_loss = F.mse_loss(pred_next_states, next_states)
+            reward_loss = F.mse_loss(pred_rewards.squeeze(), rewards)
+            done_loss = F.binary_cross_entropy(pred_dones.squeeze(), dones)
+            
+            loss = state_loss + reward_loss + done_loss
+            
+            # 更新
+            self.model_optimizer.zero_grad()
+            loss.backward()
+            self.model_optimizer.step()
+    
+    def generate_model_data(self, num_samples=10000):
+        """使用世界模型生成模拟数据"""
+        if len(self.real_buffer) < 256:
+            return
+        
+        # 从真实数据采样初始状态
+        states, _, _, _, _ = self.real_buffer.sample(num_samples)
+        
+        for state in states:
+            # 使用当前策略选择动作
+            action = self.policy.select_action(state.numpy())
+            
+            # 使用世界模型预测转移
+            with torch.no_grad():
+                state_tensor = state.unsqueeze(0)
+                action_tensor = torch.FloatTensor(action).unsqueeze(0)
+                
+                next_state, reward, done = self.world_model(state_tensor, action_tensor)
+                
+                next_state = next_state.squeeze().numpy()
+                reward = reward.item()
+                done = (done.item() > 0.5)
+            
+            # 存储到模型缓冲区
+            self.model_buffer.push(state.numpy(), action, reward, next_state, done)
+```
+
+---
+
+## 十三、逆强化学习
+
+### 13.1 最大熵IRL
+
+```python
+class MaxEntIRL:
+    """
+    最大熵逆强化学习
+    从专家演示中学习奖励函数
+    """
+    def __init__(self, state_dim, action_dim, lr=0.01):
+        # 奖励函数参数化
+        self.reward_net = nn.Sequential(
+            nn.Linear(state_dim, 64),
+            nn.ReLU(),
+            nn.Linear(64, 64),
+            nn.ReLU(),
+            nn.Linear(64, 1)
+        )
+        
+        self.optimizer = optim.Adam(self.reward_net.parameters(), lr=lr)
+    
+    def compute_reward(self, state):
+        """计算奖励"""
+        state = torch.FloatTensor(state)
+        return self.reward_net(state).item()
+    
+    def train(self, expert_trajectories, policy, num_iterations=100):
+        """
+        训练IRL
+        
+        目标：最大化专家轨迹的似然
+        同时最小化策略轨迹与专家轨迹的差异
+        """
+        for iteration in range(num_iterations):
+            # 1. 计算专家轨迹的特征期望
+            expert_features = self.compute_feature_expectations(expert_trajectories)
+            
+            # 2. 用当前奖励训练策略
+            policy.train_with_reward(self.reward_net, num_episodes=10)
+            
+            # 3. 生成策略轨迹
+            policy_trajectories = policy.generate_trajectories(num_episodes=10)
+            
+            # 4. 计算策略轨迹的特征期望
+            policy_features = self.compute_feature_expectations(policy_trajectories)
+            
+            # 5. 更新奖励函数
+            loss = -torch.sum(expert_features * torch.log(policy_features + 1e-8))
+            
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+    
+    def compute_feature_expectations(self, trajectories):
+        """计算特征期望"""
+        features = []
+        for traj in trajectories:
+            for state, action, _ in traj:
+                state_tensor = torch.FloatTensor(state)
+                feature = self.reward_net(state_tensor)
+                features.append(feature)
+        
+        return torch.stack(features).mean(dim=0)
+```
+
+---
+
+## 十四、实用技巧与调试
+
+### 14.1 超参数调优
+
+```python
+class HyperparameterTuning:
+    """超参数调优建议"""
+    
+    @staticmethod
+    def learning_rate_schedule():
+        """学习率调度"""
+        # 1. 线性衰减
+        def linear_decay(initial_lr, final_lr, total_steps):
+            def schedule(step):
+                fraction = min(step / total_steps, 1.0)
+                return initial_lr - (initial_lr - final_lr) * fraction
+            return schedule
+        
+        # 2. 余弦退火
+        def cosine_annealing(initial_lr, final_lr, total_steps):
+            def schedule(step):
+                fraction = step / total_steps
+                return final_lr + 0.5 * (initial_lr - final_lr) * \
+                       (1 + np.cos(np.pi * fraction))
+            return schedule
+        
+        return linear_decay, cosine_annealing
+    
+    @staticmethod
+    def exploration_schedule():
+        """探索策略调度"""
+        # ε-贪心衰减
+        def epsilon_decay(start=1.0, end=0.01, decay_steps=10000):
+            def schedule(step):
+                return max(end, start - (start - end) * min(step / decay_steps, 1.0))
+            return schedule
+        
+        return epsilon_decay
+    
+    @staticmethod
+    def common_ranges():
+        """常用超参数范围"""
+        return {
+            'learning_rate': [1e-5, 1e-4, 3e-4, 1e-3, 3e-3],
+            'gamma': [0.95, 0.99, 0.995, 0.999],
+            'batch_size': [32, 64, 128, 256, 512],
+            'hidden_dims': [[64, 64], [128, 128], [256, 256]],
+            'buffer_size': [10000, 50000, 100000, 1000000],
+            'tau': [0.001, 0.005, 0.01, 0.05]
+        }
+```
+
+### 14.2 调试技巧
+
+```python
+class DebuggingTools:
+    """强化学习调试工具"""
+    
+    @staticmethod
+    def plot_learning_curve(rewards, window=100):
+        """绘制学习曲线"""
+        import matplotlib.pyplot as plt
+        
+        # 平滑奖励
+        smoothed = np.convolve(rewards, np.ones(window)/window, mode='valid')
+        
+        plt.figure(figsize=(10, 6))
+        plt.plot(rewards, alpha=0.3, label='Raw')
+        plt.plot(smoothed, label=f'{window}-episode Moving Average')
+        plt.xlabel('Episode')
+        plt.ylabel('Total Reward')
+        plt.legend()
+        plt.title('Learning Curve')
+        plt.grid(True)
+        plt.show()
+    
+    @staticmethod
+    def analyze_q_values(Q, states):
+        """分析Q值分布"""
+        import matplotlib.pyplot as plt
+        
+        q_values = []
+        for state in states:
+            if state in Q:
+                q_values.extend(Q[state].values())
+        
+        plt.figure(figsize=(10, 6))
+        plt.hist(q_values, bins=50)
+        plt.xlabel('Q-value')
+        plt.ylabel('Frequency')
+        plt.title('Q-value Distribution')
+        plt.grid(True)
+        plt.show()
+        
+        print(f"Mean Q-value: {np.mean(q_values):.3f}")
+        print(f"Std Q-value: {np.std(q_values):.3f}")
+        print(f"Min Q-value: {np.min(q_values):.3f}")
+        print(f"Max Q-value: {np.max(q_values):.3f}")
+    
+    @staticmethod
+    def check_gradient_flow(model):
+        """检查梯度流"""
+        total_norm = 0
+        for p in model.parameters():
+            if p.grad is not None:
+                param_norm = p.grad.data.norm(2)
+                total_norm += param_norm.item() ** 2
+        total_norm = total_norm ** 0.5
+        
+        print(f"Total gradient norm: {total_norm:.6f}")
+        
+        if total_norm < 1e-6:
+            print("WARNING: Gradients are vanishing!")
+        elif total_norm > 100:
+            print("WARNING: Gradients are exploding!")
+    
+    @staticmethod
+    def visualize_policy(env, policy, num_episodes=5):
+        """可视化策略"""
+        for episode in range(num_episodes):
+            state = env.reset()
+            done = False
+            total_reward = 0
+            
+            while not done:
+                env.render()
+                action = policy.select_action(state, deterministic=True)
+                state, reward, done, _ = env.step(action)
+                total_reward += reward
+            
+            print(f"Episode {episode + 1} Reward: {total_reward}")
+        
+        env.close()
+    
+    @staticmethod
+    def log_training_stats(episode, metrics):
+        """记录训练统计"""
+        print(f"\n=== Episode {episode} ===")
+        for key, value in metrics.items():
+            if isinstance(value, float):
+                print(f"{key}: {value:.4f}")
+            else:
+                print(f"{key}: {value}")
+```
+
+---
+
+## 十五、高级主题
+
+### 15.1 层次强化学习 (HRL)
+
+```python
+class HierarchicalPolicy:
+    """
+    层次策略：高层策略选择子目标，低层策略执行动作
+    """
+    def __init__(self, state_dim, action_dim, goal_dim):
+        # 高层策略（元控制器）
+        self.high_level = PolicyNetwork(state_dim, goal_dim)
+        
+        # 低层策略（控制器）
+        self.low_level = PolicyNetwork(state_dim + goal_dim, action_dim)
+        
+        self.high_optimizer = optim.Adam(self.high_level.parameters(), lr=1e-4)
+        self.low_optimizer = optim.Adam(self.low_level.parameters(), lr=3e-4)
+    
+    def select_goal(self, state):
+        """高层策略选择子目标"""
+        state = torch.FloatTensor(state).unsqueeze(0)
+        goal_probs = self.high_level(state)
+        dist = Categorical(goal_probs)
+        goal = dist.sample()
+        return goal.item(), dist.log_prob(goal)
+    
+    def select_action(self, state, goal):
+        """低层策略选择动作"""
+        state = torch.FloatTensor(state).unsqueeze(0)
+        goal_tensor = torch.FloatTensor([goal]).unsqueeze(0)
+        combined = torch.cat([state, goal_tensor], dim=-1)
+        
+        action_probs = self.low_level(combined)
+        dist = Categorical(action_probs)
+        action = dist.sample()
+        return action.item(), dist.log_prob(action)
+    
+    def train_step(self, trajectory):
+        """
+        训练层次策略
+        trajectory: [(state, goal, action, reward, next_state, done)]
+        """
+        # 训练低层策略
+        low_loss = 0
+        for state, goal, action, reward, next_state, done in trajectory:
+            _, log_prob = self.select_action(state, goal)
+            low_loss += -log_prob * reward  # 简化版，实际应使用优势函数
+        
+        self.low_optimizer.zero_grad()
+        low_loss.backward()
+        self.low_optimizer.step()
+        
+        # 训练高层策略（基于子目标完成情况）
+        # 实现省略，取决于具体的子目标定义
+
+class OptionCritic:
+    """
+    Option-Critic：学习选项（option）的框架
+    选项 = (初始集合, 策略, 终止条件)
+    """
+    def __init__(self, state_dim, num_options, action_dim):
+        self.num_options = num_options
+        
+        # 选项内策略 π(a|s,o)
+        self.intra_option_policy = nn.ModuleList([
+            PolicyNetwork(state_dim, action_dim) 
+            for _ in range(num_options)
+        ])
+        
+        # 选项终止函数 β(s,o)
+        self.termination = nn.Sequential(
+            nn.Linear(state_dim, 64),
+            nn.ReLU(),
+            nn.Linear(64, num_options),
+            nn.Sigmoid()
+        )
+        
+        # 选项选择策略 π_Ω(o|s)
+        self.option_policy = nn.Sequential(
+            nn.Linear(state_dim, 64),
+            nn.ReLU(),
+            nn.Linear(64, num_options)
+        )
+        
+        self.optimizer = optim.Adam(
+            list(self.intra_option_policy.parameters()) + 
+            list(self.termination.parameters()) + 
+            list(self.option_policy.parameters()),
+            lr=1e-3
+        )
+```
+
+### 15.2 元强化学习 (Meta-RL)
+
+```python
+class MAML:
+    """
+    Model-Agnostic Meta-Learning for RL
+    学习一个好的初始化，使其能快速适应新任务
+    """
+    def __init__(self, state_dim, action_dim, alpha=0.01, beta=0.001):
+        self.policy = PolicyNetwork(state_dim, action_dim)
+        self.alpha = alpha  # 内循环学习率
+        self.beta = beta    # 外循环学习率
+        
+        self.meta_optimizer = optim.Adam(self.policy.parameters(), lr=beta)
+    
+    def inner_loop_update(self, task_data, num_steps=1):
+        """
+        内循环：在单个任务上快速适应
+        """
+        # 复制当前参数
+        adapted_params = [p.clone() for p in self.policy.parameters()]
+        
+        for _ in range(num_steps):
+            # 在任务数据上计算损失
+            loss = self.compute_task_loss(task_data, adapted_params)
+            
+            # 计算梯度
+            grads = torch.autograd.grad(loss, adapted_params, create_graph=True)
+            
+            # 更新参数
+            adapted_params = [p - self.alpha * g for p, g in zip(adapted_params, grads)]
+        
+        return adapted_params
+    
+    def meta_update(self, task_batch):
+        """
+        外循环：元更新
+        """
+        meta_loss = 0
+        
+        for task in task_batch:
+            # 内循环适应
+            train_data, test_data = task
+            adapted_params = self.inner_loop_update(train_data)
+            
+            # 在测试数据上评估
+            task_loss = self.compute_task_loss(test_data, adapted_params)
+            meta_loss += task_loss
+        
+        meta_loss /= len(task_batch)
+        
+        # 元梯度下降
+        self.meta_optimizer.zero_grad()
+        meta_loss.backward()
+        self.meta_optimizer.step()
+        
+        return meta_loss.item()
+    
+    def compute_task_loss(self, data, params):
+        """计算任务损失"""
+        # 实现省略，取决于具体任务
+        pass
+
+class RL2:
+    """
+    RL^2: Fast Reinforcement Learning via Slow Reinforcement Learning
+    使用RNN作为元学习器
+    """
+    def __init__(self, state_dim, action_dim, hidden_dim=256):
+        self.rnn = nn.LSTM(
+            state_dim + action_dim + 1,  # state + prev_action + reward
+            hidden_dim,
+            batch_first=True
+        )
+        
+        self.policy_head = nn.Linear(hidden_dim, action_dim)
+        self.value_head = nn.Linear(hidden_dim, 1)
+        
+        self.optimizer = optim.Adam(
+            list(self.rnn.parameters()) + 
+            list(self.policy_head.parameters()) + 
+            list(self.value_head.parameters()),
+            lr=1e-3
+        )
+    
+    def forward(self, history, hidden=None):
+        """
+        前向传播
+        history: [batch, seq_len, state_dim + action_dim + 1]
+        """
+        rnn_out, hidden = self.rnn(history, hidden)
+        
+        action_probs = F.softmax(self.policy_head(rnn_out), dim=-1)
+        values = self.value_head(rnn_out)
+        
+        return action_probs, values, hidden
+    
+    def train_on_task_distribution(self, task_sampler, num_iterations=1000):
+        """
+        在任务分布上训练
+        """
+        for iteration in range(num_iterations):
+            # 采样一批任务
+            tasks = task_sampler.sample(batch_size=16)
+            
+            total_loss = 0
+            for task in tasks:
+                # 收集任务轨迹
+                trajectory = self.collect_trajectory(task)
+                
+                # 计算损失
+                loss = self.compute_loss(trajectory)
+                total_loss += loss
+            
+            # 更新
+            self.optimizer.zero_grad()
+            total_loss.backward()
+            self.optimizer.step()
+```
+
+### 15.3 离线强化学习
+
+```python
+class ConservativeQLearning:
+    """
+    CQL (Conservative Q-Learning)
+    用于离线RL，避免外推误差
+    """
+    def __init__(self, state_dim, action_dim, alpha=1.0):
+        self.q_net = QNetwork(state_dim, action_dim)
+        self.target_net = QNetwork(state_dim, action_dim)
+        self.target_net.load_state_dict(self.q_net.state_dict())
+        
+        self.optimizer = optim.Adam(self.q_net.parameters(), lr=3e-4)
+        self.alpha = alpha  # CQL正则化系数
+    
+    def train_step(self, offline_batch):
+        """
+        CQL训练步骤
+        
+        最小化：
+        CQL_loss = α * (log_sum_exp Q(s,a) - Q(s,a_data)) + TD_loss
+        """
+        states, actions, rewards, next_states, dones = offline_batch
+        
+        # 标准Q-learning目标
+        with torch.no_grad():
+            next_q = self.target_net(next_states).max(1)[0]
+            target_q = rewards + 0.99 * next_q * (1 - dones)
+        
+        current_q = self.q_net(states).gather(1, actions.unsqueeze(1)).squeeze()
+        td_loss = F.mse_loss(current_q, target_q)
+        
+        # CQL惩罚项
+        all_q = self.q_net(states)
+        logsumexp_q = torch.logsumexp(all_q, dim=1)
+        data_q = all_q.gather(1, actions.unsqueeze(1)).squeeze()
+        
+        cql_loss = (logsumexp_q - data_q).mean()
+        
+        # 总损失
+        loss = td_loss + self.alpha * cql_loss
+        
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        
+        return loss.item(), td_loss.item(), cql_loss.item()
+
+class BehaviorCloning:
+    """
+    行为克隆：模仿学习的基础方法
+    直接从专家演示学习策略
+    """
+    def __init__(self, state_dim, action_dim):
+        self.policy = PolicyNetwork(state_dim, action_dim)
+        self.optimizer = optim.Adam(self.policy.parameters(), lr=1e-3)
+    
+    def train(self, expert_data, num_epochs=100, batch_size=64):
+        """
+        训练行为克隆
+        expert_data: [(state, action)]
+        """
+        dataset = torch.utils.data.TensorDataset(
+            torch.FloatTensor([s for s, a in expert_data]),
+            torch.LongTensor([a for s, a in expert_data])
+        )
+        dataloader = torch.utils.data.DataLoader(
+            dataset, batch_size=batch_size, shuffle=True
+        )
+        
+        for epoch in range(num_epochs):
+            total_loss = 0
+            
+            for states, actions in dataloader:
+                # 预测动作
+                action_probs = self.policy(states)
+                
+                # 交叉熵损失
+                loss = F.cross_entropy(action_probs, actions)
+                
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
+                
+                total_loss += loss.item()
+            
+            avg_loss = total_loss / len(dataloader)
+            
+            if (epoch + 1) % 10 == 0:
+                print(f"Epoch {epoch+1}, Loss: {avg_loss:.4f}")
+```
+
+---
+
+## 十六、实际应用案例
+
+### 16.1 Atari游戏
+
+```python
+class AtariDQN:
+    """
+    在Atari游戏上应用DQN
+    """
+    def __init__(self, num_actions):
+        self.q_net = self.build_cnn(num_actions)
+        self.target_net = self.build_cnn(num_actions)
+        self.target_net.load_state_dict(self.q_net.state_dict())
+        
+        self.optimizer = optim.Adam(self.q_net.parameters(), lr=1e-4)
+        self.replay_buffer = ReplayBuffer(100000)
+    
+    def build_cnn(self, num_actions):
+        """构建CNN网络处理图像"""
+        return nn.Sequential(
+            # 输入: [batch, 4, 84, 84] (4帧灰度图)
+            nn.Conv2d(4, 32, kernel_size=8, stride=4),
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2),
+            nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1),
+            nn.ReLU(),
+            nn.Flatten(),
+            nn.Linear(7 * 7 * 64, 512),
+            nn.ReLU(),
+            nn.Linear(512, num_actions)
+        )
+    
+    def preprocess_frame(self, frame):
+        """
+        预处理帧：
+        1. 转灰度
+        2. 裁剪
+        3. 缩放到84x84
+        """
+        # 实现省略
+        pass
+    
+    def train(self, env, num_frames=10000000):
+        """训练"""
+        frame_stack = []  # 保持最近4帧
+        
+        state = env.reset()
+        frame = self.preprocess_frame(state)
+        
+        for _ in range(4):
+            frame_stack.append(frame)
+        
+        for frame_idx in range(num_frames):
+            # 选择动作
+            state_tensor = torch.FloatTensor(np.array(frame_stack)).unsqueeze(0)
+            action = self.select_action(state_tensor)
+            
+            # 执行动作
+            next_state, reward, done, _ = env.step(action)
+            
+            # 处理帧
+            next_frame = self.preprocess_frame(next_state)
+            next_frame_stack = frame_stack[1:] + [next_frame]
+            
+            # 存储经验
+            self.replay_buffer.push(
+                np.array(frame_stack),
+                action,
+                reward,
+                np.array(next_frame_stack),
+                done
+            )
+            
+            # 训练
+            if frame_idx > 10000:
+                self.train_step()
+            
+            frame_stack = next_frame_stack
+            
+            if done:
+                state = env.reset()
+                frame = self.preprocess_frame(state)
+                frame_stack = [frame] * 4
+```
+
+### 16.2 机器人控制
+
+```python
+class RobotController:
+    """
+    使用RL控制机器人
+    """
+    def __init__(self, state_dim, action_dim):
+        # 使用SAC（适合连续控制）
+        self.agent = SAC(state_dim, action_dim, max_action=1.0)
+    
+    def train_on_simulation(self, sim_env, num_episodes=1000):
+        """在仿真环境中训练"""
+        for episode in range(num_episodes):
+            state = sim_env.reset()
+            done = False
+            
+            while not done:
+                action = self.agent.select_action(state)
+                next_state, reward, done, _ = sim_env.step(action)
+                
+                self.agent.replay_buffer.push(
+                    state, action, reward, next_state, done
+                )
+                
+                self.agent.train_step()
+                state = next_state
+    
+    def sim_to_real_transfer(self, real_env, num_episodes=10):
+        """
+        从仿真到真实的迁移
+        使用域随机化和微调
+        """
+        for episode in range(num_episodes):
+            state = real_env.reset()
+            done = False
+            
+            while not done:
+                # 使用训练好的策略
+                action = self.agent.select_action(state, deterministic=True)
+                next_state, reward, done, _ = real_env.step(action)
+                
+                # 在真实数据上微调
+                self.agent.replay_buffer.push(
+                    state, action, reward, next_state, done
+                )
+                
+                if len(self.agent.replay_buffer) > 256:
+                    self.agent.train_step()
+                
+                state = next_state
+```
+
+### 16.3 推荐系统
+
+```python
+class RecommenderAgent:
+    """
+    基于RL的推荐系统
+    """
+    def __init__(self, num_items, embedding_dim=64):
+        self.num_items = num_items
+        
+        # 物品嵌入
+        self.item_embeddings = nn.Embedding(num_items, embedding_dim)
+        
+        # 策略网络
+        self.policy = nn.Sequential(
+            nn.Linear(embedding_dim * 2, 128),  # 用户状态 + 候选物品
+            nn.ReLU(),
+            nn.Linear(128, 1),
+            nn.Sigmoid()
+        )
+        
+        self.optimizer = optim.Adam(
+            list(self.item_embeddings.parameters()) + 
+            list(self.policy.parameters()),
+            lr=1e-3
+        )
+    
+    def get_user_state(self, user_history):
+        """从用户历史获取状态表示"""
+        # 平均历史物品的嵌入
+        history_items = torch.LongTensor(user_history)
+        embeddings = self.item_embeddings(history_items)
+        return embeddings.mean(dim=0)
+    
+    def recommend(self, user_state, candidate_items, top_k=10):
+        """推荐top-k物品"""
+        scores = []
+        
+        for item in candidate_items:
+            item_emb = self.item_embeddings(torch.LongTensor([item]))
+            combined = torch.cat([user_state, item_emb.squeeze()], dim=0)
+            score = self.policy(combined.unsqueeze(0))
+            scores.append(score.item())
+        
+        # 选择top-k
+        top_indices = np.argsort(scores)[-top_k:][::-1]
+        return [candidate_items[i] for i in top_indices]
+    
+    def train_step(self, user_history, item, reward):
+        """训练步骤"""
+        user_state = self.get_user_state(user_history)
+        item_emb = self.item_embeddings(torch.LongTensor([item]))
+        
+        combined = torch.cat([user_state, item_emb.squeeze()], dim=0)
+        predicted_score = self.policy(combined.unsqueeze(0))
+        
+        # 使用实际反馈作为目标
+        loss = F.binary_cross_entropy(predicted_score, torch.FloatTensor([[reward]]))
+        
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+```
+
+---
+
+## 十七、总结与未来方向
+
+### 17.1 核心概念总结
+
+```python
+class RLSummary:
+    """
+    强化学习核心概念总结
+    """
+    
+    @staticmethod
+    def key_components():
+        """关键组成部分"""
+        return {
+            '智能体': '做出决策的实体',
+            '环境': '智能体交互的世界',
+            '状态': '环境的描述',
+            '动作': '智能体的选择',
+            '奖励': '反馈信号',
+            '策略': '状态到动作的映射',
+            '价值函数': '长期回报的预期'
+        }
+    
+    @staticmethod
+    def algorithm_categories():
+        """算法分类"""
+        return {
+            '基于值': ['Q-Learning', 'DQN', 'Double DQN', 'Dueling DQN'],
+            '基于策略': ['REINFORCE', 'PPO', 'TRPO'],
+            'Actor-Critic': ['A2C', 'A3C', 'SAC', 'TD3', 'DDPG'],
+            '基于模型': ['Dyna-Q', 'MBPO', 'World Models'],
+            '其他': ['逆强化学习', '元强化学习', '多智能体RL']
+        }
+    
+    @staticmethod
+    def when_to_use_what():
+        """何时使用哪种算法"""
+        return {
+            '离散动作空间': 'DQN, PPO, A2C',
+            '连续动作空间': 'SAC, TD3, DDPG, PPO',
+            '需要样本效率': 'SAC, TD3, 基于模型的方法',
+            '大规模并行': 'A3C, IMPALA',
+            '离线数据': 'CQL, BCQ, 行为克隆',
+            '稀疏奖励': '层次RL, 好奇心驱动, HER',
+            '多智能体': 'MADDPG, QMIX, MAPPO'
+        }
+    
+    @staticmethod
+    def common_pitfalls():
+        """常见陷阱"""
+        return [
+            '1. 过拟合到训练环境',
+            '2. 奖励设计不当导致意外行为',
+            '3. 探索不足陷入局部最优',
+            '4. 超参数敏感性高',
+            '5. 训练不稳定',
+            '6. 仿真到真实的差距',
+            '7. 非平稳性问题',
+            '8. 样本效率低'
+        ]
+    
+    @staticmethod
+    def best_practices():
+        """最佳实践"""
+        return [
+            '1. 从简单算法开始（如DQN, PPO）',
+            '2. 仔细设计奖励函数',
+            '3. 使用经验回放和目标网络',
+            '4. 进行充分的探索',
+            '5. 监控学习曲线和关键指标',
+            '6. 使用标准化和归一化',
+            '7. 调整超参数',
+            '8. 进行消融实验',
+            '9. 在多个随机种子上测试',
+            '10. 从专家演示学习（如果可用）'
+        ]
+```
+
+### 17.2 未来研究方向
+
+```markdown
+## 强化学习的未来方向
+
+### 1. 样本效率
+- 更高效的探索策略
+- 更好的模型学习
+- 离线RL的进展
+- 迁移学习和元学习
+
+### 2. 泛化能力
+- 跨任务泛化
+- 零样本学习
+- 少样本学习
+- 域适应
+
+### 3. 安全性和可靠性
+- 安全探索
+- 约束强化学习
+- 鲁棒性
+- 可解释性
+
+### 4. 真实世界应用
+- 仿真到真实的迁移
+- 人机交互
+- 现实世界的约束
+- 长期规划
+
+### 5. 理论基础
+- 收敛性保证
+- 样本复杂度分析
+- 探索-利用权衡
+- 函数逼近的理论
+
+### 6. 多智能体系统
+- 协作与竞争
+- 通信学习
+- 社会学习
+- 涌现行为
+
+### 7. 与其他AI领域结合
+- RL + 大语言模型
+- RL + 计算机视觉
+- RL + 因果推理
+- RL + 知识图谱
+```
+
+---
+
+## 附录：常用库和资源
+
+```python
+class RLResources:
+    """强化学习资源"""
+    
+    @staticmethod
+    def popular_libraries():
+        """流行的RL库"""
+        return {
+            'OpenAI Gym': '标准RL环境接口',
+            'Stable-Baselines3': 'PyTorch实现的标准算法',
+            'RLlib': 'Ray生态的可扩展RL库',
+            'TF-Agents': 'TensorFlow的RL库',
+            'Tianshou': '模块化的PyTorch RL框架',
+            'CleanRL': '简洁的RL实现',
+            'Dopamine': 'Google的RL研究框架'
+        }
+    
+    @staticmethod
+    def simulation_environments():
+        """仿真环境"""
+        return {
+            'OpenAI Gym': '经典控制、Atari等',
+            'MuJoCo': '物理仿真',
+            'PyBullet': '开源机器人仿真',
+            'Unity ML-Agents': 'Unity游戏引擎',
+            'DeepMind Control Suite': '连续控制任务',
+            'ProcGen': '程序生成的游戏环境',
+            'MinAtar': '简化版Atari',
+            'Roboschool': '机器人学习环境'
+        }
+    
+    @staticmethod
+    def learning_resources():
+        """学习资源"""
+        return {
+            '书籍': [
+                'Reinforcement Learning: An Introduction (Sutton & Barto)',
+                'Deep Reinforcement Learning Hands-On (Lapan)',
+                'Algorithms for Reinforcement Learning (Szepesvári)'
+            ],
+            '课程': [
+                'David Silver RL Course',
+                'CS285 Deep RL (UC Berkeley)',
+                'DeepMind x UCL RL Course'
+            ],
+            '论文': [
+                'DQN (Mnih et al., 2015)',
+                'PPO (Schulman et al., 2017)',
+                'SAC (Haarnoja et al., 2018)',
+                'AlphaGo (Silver et al., 2016)'
+            ]
+        }
+
+# 完整笔记结束
+```
+
+---
+
+## 结语
+
+本笔记涵盖了强化学习从基础到高级的核心内容，包括：
+
+✅ **基础理论**：MDP、价值函数、策略
+✅ **经典算法**：动态规划、蒙特卡洛、时序差分
+✅ **深度强化学习**：DQN、PPO、SAC、TD3等
+✅ **高级主题**：多智能体、元学习、离线RL
+✅ **实际应用**：游戏、机器人、推荐系统
+
+**建议学习路径**：
+1. 掌握基础概念和数学原理
+2. 实现简单的表格方法（Q-Learning）
+3. 学习深度强化学习算法（DQN, PPO）
+4. 在标准环境上实验（Gym）
+5. 探索高级主题和实际应用
+
+祝学习顺利！🚀
